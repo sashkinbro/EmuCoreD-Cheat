@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sashkinbro/EmuCoreD-Cheat/schemas/cheat-catalog.schema.json",
+  "title": "EmuCoreD 3DS cheat catalog",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "titleIds",
+          "authors",
+          "description",
+          "downloadUrl",
+          "sourceUrl",
+          "sourceName",
+          "license",
+          "blockCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "titleIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9A-F]{16}$"
+            }
+          },
+          "authors": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "downloadUrl": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "packPath": {
+            "type": "string",
+            "pattern": "^files/[A-Za-z0-9._/-]+\\.txt$"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "sourceName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blockCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9A-F]{64}$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

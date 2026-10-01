@@ -1,3 +1,10 @@
 {
-  "sources": []
+  "sources": [
+    {
+      "name": "CTRPF-AR-CHEAT-CODES",
+      "url": "https://github.com/iSharingan/CTRPF-AR-CHEAT-CODES",
+      "license": "Unlicensed (link-only)",
+      "notes": "Community Action Replay codes in the Gateway format used by Citra and Azahar. Files are linked, not mirrored, because the repository has no redistribution license."
+    }
+  ]
 }

@@ -15,8 +15,9 @@ title id, with `[name]` sections and `XXXXXXXX YYYYYYYY` code lines.
 
 ## Status
 
-The catalog is being populated. Redistributable files are mirrored in this
-repository; entries without redistribution permission link to their authors'
-downloads. The catalog credits the original sources.
+The catalog links 632 community cheat files covering 625 titles from
+[CTRPF-AR-CHEAT-CODES](https://github.com/iSharingan/CTRPF-AR-CHEAT-CODES).
+The upstream repository has no redistribution license, so files are linked
+rather than mirrored. Entries use the Gateway cheat format consumed by Azahar.
 
 No game data is distributed here. Nintendo 3DS is a trademark of Nintendo.

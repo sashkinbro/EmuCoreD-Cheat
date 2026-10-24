@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EmuCoreD typed platform cheat catalog",
+  "type": "object",
+  "required": ["schemaVersion", "platform", "generatedAt", "stats", "entries"],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "platform": {"enum": ["n3ds", "nds", "gamecube", "wii", "gba", "gb", "gbc", "nes", "snes"]},
+    "generatedAt": {"type": "string"},
+    "stats": {"type": "object", "required": ["files", "blocks", "mappedFiles", "manualOnlyFiles", "formats"]},
+    "entries": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["id", "title", "blockCount", "formats", "identities", "mappingStatus"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "title": {"type": "string", "minLength": 1},
+          "blockCount": {"type": "integer", "minimum": 1},
+          "formats": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "identities": {"type": "array", "items": {"type": "object"}},
+          "mappingStatus": {"enum": ["exact-source-identity", "unmapped-manual-only"]},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "sourceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "sizeBytes": {"type": "integer", "minimum": 1}
+        },
+        "oneOf": [
+          {"required": ["path", "sha256", "sizeBytes"]},
+          {"required": ["distribution", "downloadUrl", "sourceSha256"], "properties": {"distribution": {"const": "link-only"}}}
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "platformCount": 9,
+  "fileCount": 12916,
+  "blockCount": 807319,
+  "mappedFiles": 7550,
+  "manualOnlyFiles": 5366,
+  "guestExecutionVerified": false,
+  "legacy3dsPreserved": true,
+  "allSourceHashesVerified": true,
+  "allPayloadHashesVerified": true
+}

@@ -5,8 +5,9 @@ import json
 import pathlib
 import re
 import subprocess
-from urllib.parse import unquote, urlparse
-from build_multiplatform import GitBlobs
+from collections import defaultdict
+from urllib.parse import quote, unquote, urlparse
+from build_multiplatform import GitBlobs, PLATFORMS as CARTRIDGES, IdentityMatcher, parse_dat, sha
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PLATFORMS = {'n3ds', 'nds', 'gamecube', 'wii', 'gba', 'gb', 'gbc', 'nes', 'snes'}
@@ -36,6 +37,20 @@ def validate():
     assert {platform['id'] for platform in manifest['platforms']} == PLATFORMS
     ids, total_blocks, total_files, mapped = set(), 0, 0, 0
     for platform in manifest['platforms']:
+        matcher = None
+        if platform['id'] in CARTRIDGES:
+            directory = CARTRIDGES[platform['id']]
+            paths = ['metadat/no-intro/' + directory + '.dat']
+            if platform['id'] == 'nes':
+                paths.append('dat/' + directory + '.dat')
+            records = defaultdict(list)
+            for path in paths:
+                raw = blob_sources['libretro'].read(path)
+                provenance = {'url': 'https://github.com/libretro/libretro-database/blob/' + sources['libretro']['revision'] + '/' + quote(path),
+                              'sha256': sha(raw)}
+                for name, identities in parse_dat(raw.decode('utf-8-sig')).items():
+                    records[name].extend(dict(identity, provenance=provenance) for identity in identities)
+            matcher = IdentityMatcher(records)
         catalog = checked_file(platform)
         assert catalog['platform'] == platform['id']
         entries = catalog['entries']
@@ -61,6 +76,8 @@ def validate():
                 assert pack['id'] == entry['id'] and pack['platform'] == platform['id']
                 assert pack['autoEnable'] is False and pack['guestTested'] is False
                 assert pack['identities'] == entry['identities']
+                if matcher is not None:
+                    assert pack['identities'] == matcher.match(pack['title']), pack['id'] + ': DAT mapping/evidence mismatch'
                 assert len(pack['blocks']) == entry['blockCount']
                 assert sorted({block['format'] for block in pack['blocks']}) == entry['formats']
                 assert all(block['enabled'] is False and block['guestTested'] is False for block in pack['blocks'])

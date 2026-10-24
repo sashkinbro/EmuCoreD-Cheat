@@ -6,10 +6,52 @@ import pathlib
 import tempfile
 from unittest.mock import patch
 import validate_multiplatform
-from build_multiplatform import parse_cht, parse_dat, parse_dolphin, match_identity, code_format
+from build_multiplatform import parse_cht, parse_dat, parse_dolphin, match_identity, code_format, IdentityMatcher
 
 
 class CatalogContracts(unittest.TestCase):
+    @staticmethod
+    def matcher(*names):
+        return IdentityMatcher({name: [{'name': name, 'romName': name + '.nds', 'sha1': str(i)}]
+                                for i, name in enumerate(names)})
+
+    def test_unique_missing_language_metadata_preserves_the_dat_release(self):
+        matcher = self.matcher('Game (Europe) (En,Fr)')
+        found = matcher.match('Game (Europe)')
+        self.assertEqual('Game (Europe) (En,Fr)', found[0]['name'])
+        self.assertEqual('unique-qualified-dat-alias', found[0]['mappingEvidence']['rule'])
+        self.assertEqual([], matcher.match('Game (Europe) (En,De)'))
+
+    def test_missing_language_metadata_is_rejected_for_multiple_editions(self):
+        matcher = self.matcher('Game (Europe) (En,Fr)', 'Game (Europe) (En,De)')
+        self.assertEqual([], matcher.match('Game (Europe)'))
+        self.assertEqual('Game (Europe) (En,Fr)', matcher.match('Game (Europe) (En,Fr)')[0]['name'])
+
+    def test_aliases_keep_region_revision_hacks_and_enhancement_qualifiers(self):
+        matcher = self.matcher('Game & Watch (USA, Europe) (En,Fr) (Rev 1) (SGB Enhanced)')
+        self.assertTrue(matcher.match('Game _ Watch (Europe, USA) (Rev 1) (SGB Enhanced) (Xploder)'))
+        for title in ['Game & Watch (USA) (Rev 1) (SGB Enhanced)',
+                      'Game & Watch (USA, Europe) (SGB Enhanced)',
+                      'Game & Watch (USA, Europe) (Rev 1)',
+                      'Game & Watch (USA, Europe) (Rev 2) (SGB Enhanced)',
+                      'Game & Watch (USA, Europe) (Rev 1) (SGB Enhanced) (Hack)',
+                      'Game & Watch']:
+            self.assertEqual([], matcher.match(title), title)
+
+    def test_typography_article_and_rom_filename_aliases_are_unique(self):
+        matcher = self.matcher("Adventure, The (USA)")
+        self.assertTrue(matcher.match('The Adventure (USA)'))
+        self.assertTrue(matcher.match('adventure, the (USA)'))
+        self.assertEqual([], matcher.match('Adventure (USA)'))
+        matcher = IdentityMatcher({'Official (USA)': [{'romName': 'Source Alias (USA).gba'}]})
+        self.assertTrue(matcher.match('Source Alias (USA)'))
+
+    def test_normalization_collision_is_rejected_and_unknown_suffix_is_retained(self):
+        matcher = self.matcher('Game & Watch (USA)', 'Game _ Watch (USA)')
+        self.assertEqual([], matcher.match('GAME & WATCH (USA)'))
+        self.assertEqual([], matcher.match('Game & Watch (USA) (Game Genie Edition)'))
+        self.assertEqual([], matcher.match('Game & Watch (USA) (diff)'))
+
     def test_ds_pairs_and_categories_are_not_executable_cheats(self):
         blocks = parse_cht('cheats = 2\ncheat0_desc = "Category"\ncheat1_desc = "Lives"\ncheat1_code = "02000000+00000063+D2000000+00000000"', 'nds')
         self.assertEqual(1, len(blocks))

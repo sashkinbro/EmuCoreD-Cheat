@@ -20,7 +20,9 @@ PLATFORMS = {
     'nes': 'Nintendo - Nintendo Entertainment System',
     'snes': 'Nintendo - Super Nintendo Entertainment System',
 }
-FORMAT_TAG = re.compile(r' \((?:Game ?Genie|Game ?Shark|Action Replay|Code ?Breaker|Pro Action Replay)\)$', re.I)
+FORMAT_TAG = re.compile(r' \((?:Game ?Genie|Game ?Shark|Action Replay|Code ?Breaker|Pro Action Replay|Xploder)\)$', re.I)
+LANGUAGE_TAG = re.compile(r' \((?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi|Ja|Zh|Ko|Ru|Pl|Cs|Hu|El|Tr|Ar|He)(?:,(?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi|Ja|Zh|Ko|Ru|Pl|Cs|Hu|El|Tr|Ar|He))*\)')
+REGION_TAG = re.compile(r'\((?:USA|Europe|Japan|World|Australia|Canada|France|Germany|Spain|Italy|Netherlands|Sweden|Norway|Denmark|Finland|Korea|China|Taiwan|Hong Kong|Brazil|Russia|United Kingdom|Asia)(?:, (?:USA|Europe|Japan|World|Australia|Canada|France|Germany|Spain|Italy|Netherlands|Sweden|Norway|Denmark|Finland|Korea|China|Taiwan|Hong Kong|Brazil|Russia|United Kingdom|Asia))*\)')
 PAIR = re.compile(r'^[0-9A-F]{8} [0-9A-F]{8}$')
 
 
@@ -86,9 +88,57 @@ def parse_dat(text):
     return dict(records)
 
 
+def title_key(title):
+    """Narrow typography aliases; never remove a release qualifier or a word."""
+    title = title.replace(' _ ', ' & ').replace('\u2019', "'")
+    title = re.sub(r'\s+', ' ', title).strip()
+    # No-Intro moves a leading article after the game name. Keep the article.
+    parts = title.split(' (', 1)
+    base = parts[0]
+    article = re.match(r'^(The|A|An) (.+)$', base, re.I)
+    if article:
+        base = article[2] + ', ' + article[1]
+    title = base + (' (' + parts[1] if len(parts) > 1 else '')
+    # A multi-region list is a set, but a region subset is never an alias.
+    title = REGION_TAG.sub(lambda m: '(' + ', '.join(sorted(m[0][1:-1].split(', '))) + ')', title)
+    return title.casefold()
+
+
+class IdentityMatcher:
+    """Only unique, qualified DAT aliases are eligible for automatic lookup.
+
+    A cheat filename without a language tag may refer to one fully qualified
+    DAT release, never to multiple language editions. Explicit language tags,
+    revisions, beta/hack/enhancement qualifiers and region sets stay intact.
+    """
+    def __init__(self, records):
+        self.records = records
+        self.aliases = defaultdict(set)
+        for name, identities in records.items():
+            # ROM names are aliases only inside these unmodified ROM DATs.
+            names = {name} | {pathlib.Path(i['romName']).stem for i in identities if i.get('romName')}
+            for alias in names:
+                if not REGION_TAG.search(alias):
+                    continue
+                self.aliases[title_key(alias)].add(name)
+                if LANGUAGE_TAG.search(alias):
+                    self.aliases[title_key(LANGUAGE_TAG.sub('', alias))].add(name)
+
+    def match(self, title):
+        cleaned = clean_title(title)
+        if cleaned in self.records:
+            names, rule = [cleaned], 'exact-dat-name'
+        else:
+            names = sorted(self.aliases.get(title_key(cleaned), []))
+            if len(names) != 1:
+                return []
+            rule = 'unique-qualified-dat-alias'
+        return [dict(item, mappingEvidence={'sourceTitle': title, 'datName': name, 'rule': rule})
+                for name in names for item in self.records[name]]
+
+
 def match_identity(title, records):
-    # Only documented cheat-device suffixes are removed, never region/language/revision.
-    return records.get(clean_title(title), [])
+    return IdentityMatcher(records).match(title)
 
 
 def code_format(platform, code, title, fields):
@@ -204,12 +254,12 @@ def main():
     lib_blobs, ctr_blobs, dolphin_blobs = (GitBlobs(path, pin) for path, pin in
         ((args.libretro, lib_pin), (args.ctrpf, ctr_pin), (args.dolphin, dolphin_pin)))
     indexes = defaultdict(list)
-    report = {'schemaVersion': 1, 'generatedAt': generated, 'platforms': {}, 'excluded': [], 'guestExecutionVerified': False}
+    report = {'schemaVersion': 1, 'generatedAt': generated, 'platforms': {}, 'excluded': [], 'identitySources': [], 'guestExecutionVerified': False}
     license_dir = root / 'LICENSES'
     license_dir.mkdir(exist_ok=True)
-    (license_dir / 'CC-BY-SA-4.0.txt').write_bytes((args.libretro / 'LICENSE').read_bytes())
-    (license_dir / 'Dolphin-COPYING.txt').write_bytes((args.dolphin / 'COPYING').read_bytes())
-    (license_dir / 'GPL-2.0-or-later.txt').write_bytes((args.dolphin / 'LICENSES/GPL-2.0-or-later.txt').read_bytes())
+    (license_dir / 'CC-BY-SA-4.0.txt').write_bytes(lib_blobs.read('LICENSE'))
+    (license_dir / 'Dolphin-COPYING.txt').write_bytes(dolphin_blobs.read('COPYING'))
+    (license_dir / 'GPL-2.0-or-later.txt').write_bytes(dolphin_blobs.read('LICENSES/GPL-2.0-or-later.txt'))
 
     def publish(platform, title, source_path, source_url, source_name, license_id, blocks, identities, raw_bytes, **extras):
         if not blocks:
@@ -229,12 +279,21 @@ def main():
                                  'identities': identities, 'mappingStatus': payload['mappingStatus']})
 
     for platform, directory in PLATFORMS.items():
-        dat_path = args.libretro / 'metadat/no-intro' / (directory + '.dat')
-        dat_rel = dat_path.relative_to(args.libretro).as_posix()
-        dat_bytes = lib_blobs.read(dat_rel)
-        records = parse_dat(dat_bytes.decode('utf-8-sig'))
-        dat_source = {'url': f'https://github.com/libretro/libretro-database/blob/{lib_pin}/{quote(dat_rel)}',
-                      'sha256': sha(dat_bytes)}
+        dat_paths = ['metadat/no-intro/' + directory + '.dat']
+        if platform == 'nes':
+            dat_paths.append('dat/' + directory + '.dat')
+        records = defaultdict(list)
+        for dat_rel in dat_paths:
+            dat_bytes = lib_blobs.read(dat_rel)
+            dat_source = {'url': f'https://github.com/libretro/libretro-database/blob/{lib_pin}/{quote(dat_rel)}',
+                          'sha256': sha(dat_bytes)}
+            parsed = parse_dat(dat_bytes.decode('utf-8-sig'))
+            report['identitySources'].append({'platform': platform, 'path': dat_rel,
+                                             'recordNames': len(parsed), 'license': 'CC-BY-SA-4.0', **dat_source})
+            for name, identities in parsed.items():
+                records[name].extend(dict(item, provenance=dat_source) for item in identities)
+        matcher = IdentityMatcher(records)
+        mapping_rules, ambiguous = Counter(), []
         for file in sorted((args.libretro / 'cht' / directory).glob('*.cht')):
             rel = file.relative_to(args.libretro).as_posix()
             raw = lib_blobs.read(rel)
@@ -242,13 +301,21 @@ def main():
             blocks = parse_cht(text, platform, file.stem)
             if not blocks:
                 continue
-            identities = [dict(item, provenance=dat_source) for item in match_identity(file.stem, records)]
+            identities = matcher.match(file.stem)
+            mapping_rules[identities[0]['mappingEvidence']['rule'] if identities else 'manual-only'] += 1
+            candidates = sorted(matcher.aliases.get(title_key(clean_title(file.stem)), []))
+            if not identities and len(candidates) > 1:
+                ambiguous.append({'sourceTitle': file.stem, 'candidateDatNames': candidates})
             publish(platform, file.stem, rel,
                     f'https://github.com/libretro/libretro-database/blob/{lib_pin}/{quote(rel)}',
                     'libretro-database', 'CC-BY-SA-4.0', blocks, identities, raw,
                     sourceRevision=lib_pin, originalText=text, originalFormat='retroarch-cht',
                     attributionUrl='https://github.com/libretro/libretro-database',
                     modificationNotice='Typed blocks extracted; disabled by default. Original source text retained.')
+        write_json(root / 'reports' / (platform + '-mapping.json'),
+                   {'schemaVersion': 1, 'platform': platform, 'rules': dict(mapping_rules),
+                    'ambiguousAliasesRejected': ambiguous, 'fuzzyMatching': False,
+                    'explicitReleaseQualifiersPreserved': True})
         credits = args.libretro / 'cht' / directory / '_Credits.cht'
         if credits.exists():
             target = root / 'platforms' / platform / 'UPSTREAM-CREDITS.cht'

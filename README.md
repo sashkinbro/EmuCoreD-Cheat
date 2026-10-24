@@ -9,15 +9,15 @@ Nintendo encryption keys, or save games are distributed here.
 | Platform | Source files | Cheat blocks | Files with exact source identities | Manual selection only |
 | --- | ---: | ---: | ---: | ---: |
 | Nintendo 3DS | 632 | 12,327 | 632 | 0 |
-| Nintendo DS | 4,082 | 645,072 | 2,004 | 2,078 |
+| Nintendo DS | 4,082 | 645,072 | 3,276 | 806 |
 | GameCube | 225 | 4,029 | 225 | 0 |
 | Wii | 42 | 134 | 42 | 0 |
-| Game Boy Advance | 513 | 7,015 | 174 | 339 |
-| Game Boy | 1,484 | 16,849 | 933 | 551 |
-| Game Boy Color | 933 | 9,274 | 529 | 404 |
-| NES / Famicom | 2,243 | 43,810 | 1,455 | 788 |
-| SNES / Super Famicom | 2,762 | 68,809 | 1,556 | 1,206 |
-| **Total** | **12,916** | **807,319** | **7,550** | **5,366** |
+| Game Boy Advance | 513 | 7,015 | 219 | 294 |
+| Game Boy | 1,484 | 16,849 | 1,080 | 404 |
+| Game Boy Color | 933 | 9,274 | 647 | 286 |
+| NES / Famicom | 2,243 | 43,810 | 1,682 | 561 |
+| SNES / Super Famicom | 2,762 | 68,809 | 1,634 | 1,128 |
+| **Total** | **12,916** | **807,319** | **9,437** | **3,479** |
 
 These are source/catalog validation counts, **not guest execution test results**.
 Some source blocks require a format unsupported by a particular emulator adapter.
@@ -38,16 +38,34 @@ and character selectors from the upstream database.
 ## Matching and execution boundaries
 
 No serial, digest, region, revision or code is fabricated. Cartridge mappings
-require an **exact DAT name**, including region and revision; only a documented
-cheat-device suffix may be removed. Mapped records carry source ROM CRC32,
+require an exact DAT name or a **unique qualified DAT alias**. Narrow aliases
+cover case, whitespace, curly apostrophes, leading/trailing articles, filename
+` _ ` for ` & `, and ordering within the same region set. Recognized cheat-device
+suffixes, including Xploder, may be removed. ROM filenames in the same unmodified
+ROM DAT also provide sourced aliases. Every explicit region, language, revision,
+beta, hack and enhancement qualifier remains required. A missing language tag
+may be filled only when the remaining qualified name identifies one DAT release;
+multiple language editions remain manual-only. No revision or region is filled
+in this way. Mapped records carry source ROM CRC32,
 MD5/SHA1, byte size, region, revision and immutable DAT provenance. Hashes refer
 to the exact ROM bytes described by that DAT. They are not DS header CRCs,
-archive hashes, RVZ hashes or adjusted headered/headerless variants.
+archive hashes, RVZ hashes or invented headered/headerless variants. NES `.nes`
+and `.unh` records retain their actual separate DAT hashes and sizes. Upstream
+documents the No-Intro NES DAT as covering iNES 1.0, NES 2.0 and headerless ROMs;
+the supplemental `dat/` NES source explicitly describes iNES 1.0 headers.
+A `.nes` digest covers the described whole file; `.unh` covers the described
+headerless file. Neither is a guessed hash obtained by modifying a CRC.
 
-Files without an exact DAT record remain `unmapped-manual-only`. Similar titles,
+Files without a unique sourced DAT identity remain `unmapped-manual-only`. Similar titles,
 other regions and other revisions are never silently substituted. A source
 name match documents the intended game, not proof that every code works.
 Consumers should require an exact platform and ROM digest when available.
+Every cartridge identity records the source filename, selected DAT name and
+mapping rule in `mappingEvidence`, alongside the immutable DAT URL and SHA-256.
+`reports/build.json` lists each identity DAT, pin, license and digest;
+`reports/<platform>-mapping.json` counts mapping rules and lists rejected
+ambiguous aliases. The validator reconstructs every mapping from pinned Git
+objects and checks that this complete evidence matches the published identity.
 
 Dolphin packs retain real six-character guest IDs. Revisions are recorded only
 when specified upstream; otherwise they remain `unspecified-upstream`.
@@ -73,7 +91,7 @@ reject unsupported commands rather than assume all upstream files work.
 ## Sources and licensing
 
 - [libretro-database](https://github.com/libretro/libretro-database): Nintendo
-  cartridge cheats and exact No-Intro metadata, under its published **CC BY-SA
+  cartridge cheats, No-Intro metadata and the supplemental NES iNES DAT, under its published **CC BY-SA
   4.0** license. Contributor/source credits are preserved. Typed extraction and
   default-disabled changes are identified in every pack.
 - [Dolphin](https://github.com/dolphin-emu/dolphin): ActionReplay/Gecko sections
